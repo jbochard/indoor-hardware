@@ -18,7 +18,6 @@ void Display::begin() {
 void Display::clear() {
   display->clearDisplay();
   display->clearBuffer();
-  display->sendBuffer();
 }
 
 void Display::printXY(int x, int y, String msg) {

@@ -12,8 +12,12 @@ public:
   }
 
   virtual String name() = 0;
-  
+
   virtual void execute() = 0;
+
+  virtual String getProperty(String key) = 0;
+  
+  virtual void setProperty(String key, String value) = 0;
 
   virtual bool configureBuffer(String buf) = 0;
 

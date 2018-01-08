@@ -14,7 +14,7 @@ public:
     relayName = "Relay1";
     enabled = false;
     humIni = 0.0;
-    humEnd = 0.0;  
+    humEnd = 0.0;
   }
 
   String name() {
@@ -34,7 +34,7 @@ public:
       if (humIni > 0 && humEnd > 0) {
         apply = sensor.value >= humIni && sensor.value <= humEnd;
       }
-      hardware->writeSwitch(relayName, "state", apply);
+      hardware->writeSwitch(relayName, "value", apply, true);
     }
   }
 
@@ -65,10 +65,41 @@ public:
     return "{ \"type\": \"humRange\",  \"relayName\": \""+relayName+"\", \"enabled\": "+((enabled)?"true":"false")+", \"humIni\": "+String(humIni)+", \"humEnd\": "+String(humEnd)+" }";
   }
 
+  String getProperty(String key) {
+    if (key == "enabled") {
+      return ((enabled)?"true":"false");
+    }
+    if (key == "relayName") {
+      return relayName;
+    }
+    if (key == "humIni") {
+      return floatToString(humIni);
+    }
+    if (key == "humEnd") {
+      return floatToString(humEnd);
+    }
+    return "";
+  }
+
+  void setProperty(String key, String value) {
+    if (key == "relayName") {
+      relayName = value;
+    }
+    if (key == "enabled") {
+      enabled = value.toInt();
+    }
+    if (key == "humIni") {
+      humIni = value.toFloat();
+    }
+    if (key == "humEnd") {
+      humEnd = value.toFloat();
+    }
+  }
+
   // { "type": "humRange", "relayName": "...", "enabled": true, "startHour": 0, "lightHours": 18 }
   bool configureJSON(String json) {
     jsmn_parser p;
-    jsmntok_t t[11];
+    jsmntok_t t[14];
     char* buffer = strdup(json.c_str());
     jsmn_init(&p);
     int j = jsmn_parse(&p, buffer, strlen(buffer), t, sizeof(t)/sizeof(t[0]));

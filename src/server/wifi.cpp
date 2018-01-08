@@ -21,8 +21,8 @@ void Wifi::begin() {
   ssid.toCharArray(b_ssid, ssid.length()+1);
   password.toCharArray(b_pass, password.length()+1);
 
-  WiFi.persistent(false); //These 3 lines are a required work around
-  WiFi.mode(WIFI_OFF);    //otherwise the module will not reconnect
+//  WiFi.persistent(false);
+//  WiFi.mode(WIFI_OFF);
   WiFi.mode(WIFI_STA);    //if it gets disconnected
   WiFi.begin(b_ssid, b_pass);
   delay(1000);

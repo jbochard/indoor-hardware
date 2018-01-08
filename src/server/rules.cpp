@@ -3,6 +3,7 @@
 #include "rules/tempRangeRule.h"
 #include "rules/humRangeRule.h"
 #include "rules/soilRangeRule.h"
+#include "rules/growRule.h"
 #include <FS.h>
 
 #define RULES_FILE  "rulesFile.conf"
@@ -13,10 +14,11 @@ Rules::Rules(std::shared_ptr<Hardware> h) : hardware(h) {
 
 void Rules::begin() {
   cont = 0;
-  rules[0].reset(new ClockRangeRule(hardware));
-  rules[1].reset(new TempRangeRule(hardware));
-  rules[2].reset(new HumRangeRule(hardware));
-  rules[3].reset(new SoilRangeRule(hardware));
+  rules[0] = std::make_shared<ClockRangeRule>(hardware);
+  rules[1] = std::make_shared<TempRangeRule>(hardware);
+  rules[2] = std::make_shared<HumRangeRule>(hardware);
+  rules[3] = std::make_shared<SoilRangeRule>(hardware);
+  rules[4] = std::make_shared<GrowRule>(hardware, rules[0]);
   readRules();
 }
 

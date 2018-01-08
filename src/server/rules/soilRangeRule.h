@@ -34,7 +34,7 @@ public:
       if (soilIni > 0 && soilEnd > 0) {
         apply = sensor.value >= soilIni && sensor.value <= soilEnd;
       }
-      hardware->writeSwitch(relayName, "state", apply);
+      hardware->writeSwitch(relayName, "value", apply, true);
     }
   }
 
@@ -42,8 +42,8 @@ public:
   bool configureBuffer(String buf) {
     if (buf.charAt(0) == 'S') {
       enabled    = buf.substring(1, 2).toInt();
-      soilIni     = buf.substring(2, 5).toInt();
-      soilEnd     = buf.substring(5, 8).toInt();
+      soilIni    = buf.substring(2, 5).toInt();
+      soilEnd    = buf.substring(5, 8).toInt();
       relayName  = buf.substring(8, 14);
       return true;
     }
@@ -60,10 +60,40 @@ public:
     return "{ \"type\": \"soilRange\",  \"relayName\": \""+relayName+"\", \"enabled\": "+((enabled)?"true":"false")+", \"soilIni\": "+String(soilIni)+", \"soilEnd\": "+String(soilEnd)+" }";
   }
 
+  String getProperty(String key) {
+    if (key == "enabled") {
+      return ((enabled)?"true":"false");
+    }
+    if (key == "relayName") {
+      return relayName;
+    }
+    if (key == "soilIni") {
+      return String(soilIni);
+    }
+    if (key == "soilEnd") {
+      return String(soilEnd);
+    }
+    return "";
+  }
+  void setProperty(String key, String value) {
+    if (key == "relayName") {
+      relayName = value;
+    }
+    if (key == "enabled") {
+      enabled = value.toInt();
+    }
+    if (key == "soilIni") {
+      soilIni = value.toInt();
+    }
+    if (key == "soilIni") {
+      soilIni = value.toInt();
+    }
+  }
+
   // { "type": "soilRange", "relayName": "...", "enabled": true, "startHour": 0, "lightHours": 18 }
   bool configureJSON(String json) {
     jsmn_parser p;
-    jsmntok_t t[11];
+    jsmntok_t t[14];
     char* buffer = strdup(json.c_str());
     jsmn_init(&p);
     int j = jsmn_parse(&p, buffer, strlen(buffer), t, sizeof(t)/sizeof(t[0]));

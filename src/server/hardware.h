@@ -15,6 +15,8 @@ public:
 
   HSENSOR readSensor(String sensorName);
 
+  HSENSOR readSensor(int idx);
+
   String printSensor(String sensorName);
 
   int getSwitchNumber();
@@ -23,15 +25,17 @@ public:
 
   HSWITCH readSwitch(String switchName);
 
-  void writeSwitch(String name, String key, bool value);
+  HSWITCH readSwitch(int idx);
+
+  HSWITCH writeSwitch(String name, String key, bool value, bool automatic);
 
   String printSwitch(String sensorName);
 
-  int switchUpdate(String name, String body);
+  HSWITCH switchUpdate(String name, String body);
 
   ClockValue readClock();
 
-  ClockValue writeClock(String year, String month, String day, String hour, String minute, String second);
+  ClockValue writeClock(String body);
 
   void update();
 

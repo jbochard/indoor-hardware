@@ -14,7 +14,7 @@ public:
     relayName = "Relay1";
     enabled = false;
     tempIni = 0.0;
-    tempEnd = 0.0;   
+    tempEnd = 0.0;
   }
 
   String name() {
@@ -33,7 +33,7 @@ public:
       if (tempIni > 0 && tempEnd > 0) {
         apply = sensor.value >= tempIni && sensor.value <= tempEnd;
       }
-      hardware->writeSwitch(relayName, "state", apply);
+      hardware->writeSwitch(relayName, "value", apply, true);
     }
   }
 
@@ -64,10 +64,40 @@ public:
     return "{ \"type\": \"tempRange\",  \"relayName\": \""+relayName+"\", \"enabled\": "+((enabled)?"true":"false")+", \"tempIni\": "+String(tempIni)+", \"tempEnd\": "+String(tempEnd)+" }";
   }
 
+  String getProperty(String key) {
+    if (key == "enabled") {
+      return ((enabled)?"true":"false");
+    }
+    if (key == "relayName") {
+      return relayName;
+    }
+    if (key == "tempIni") {
+      return floatToString(tempIni);
+    }
+    if (key == "tempEnd") {
+      return floatToString(tempEnd);
+    }
+    return "";
+  }
+  void setProperty(String key, String value) {
+    if (key == "relayName") {
+      relayName = value;
+    }
+    if (key == "enabled") {
+      enabled = value.toInt();
+    }
+    if (key == "tempIni") {
+      tempIni = value.toFloat();
+    }
+    if (key == "tempEnd") {
+      tempEnd = value.toFloat();
+    }
+  }
+
   // { "type": "tempRange", "relayName": "...", "enabled": true, "startHour": 0, "lightHours": 18 }
   bool configureJSON(String json) {
     jsmn_parser p;
-    jsmntok_t t[11];
+    jsmntok_t t[14];
     char* buffer = strdup(json.c_str());
     jsmn_init(&p);
     int j = jsmn_parse(&p, buffer, strlen(buffer), t, sizeof(t)/sizeof(t[0]));

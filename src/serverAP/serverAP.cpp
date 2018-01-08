@@ -7,8 +7,26 @@
 
 const char WiFiAPPSK[] = "sparkfun";
 
+extern "C" {
+  #include "user_interface.h"
+  #include "mem.h"
+
+  void _onWiFiEvent(System_Event_t *event){
+    if(event->event == EVENT_SOFTAPMODE_STACONNECTED){
+      Event_SoftAPMode_StaConnected_t *data = (Event_SoftAPMode_StaConnected_t *)(&event->event_info.sta_connected);
+      Serial.printf("Station Connected: id: %d, mac: " MACSTR "\n", data->aid, MAC2STR(data->mac));
+    } else if(event->event == EVENT_SOFTAPMODE_STADISCONNECTED){
+      Event_SoftAPMode_StaDisconnected_t *data = (Event_SoftAPMode_StaDisconnected_t *)(&event->event_info.sta_disconnected);
+      Serial.printf("Station Disconnected: id: %d, mac: " MACSTR "\n", data->aid, MAC2STR(data->mac));
+    }
+    Serial.println("Evento: " + String(event->event));
+  }
+}
+
 ServerAP::ServerAP(std::shared_ptr<Display> d) {
   Serial.begin(9600);
+  wifi_set_event_handler_cb(_onWiFiEvent);
+  Serial.setDebugOutput(true);
   SPIFFS.begin();
 
   display = d;
@@ -17,19 +35,24 @@ ServerAP::ServerAP(std::shared_ptr<Display> d) {
 }
 
 void ServerAP::start() {
-  ESP.eraseConfig();
+  WiFi.begin();
+  WiFi.disconnect();
+  delay(1000);
+  WiFi.setPhyMode(WIFI_PHY_MODE_11B);
   WiFi.mode(WIFI_AP);
 
   String ssid = buildSSID("davinci");
   String pwd = randomPWD(10);
 
   WiFi.softAP(ssid.c_str(), pwd.c_str());
+  WiFi.printDiag(Serial);
 
   display->printXY(0, 1, "IP: 192.168.4.1     ");
   display->printXY(0, 3, "ssid: " + ssid);
   display->printXY(0, 4, "pwd: " + pwd);
 
   server.reset(new ESP8266WebServer(80));
+
   server->on("/config/wifi", HTTP_POST, [this]() {
     if (server->hasArg("plain")) {
       String plain = server->arg("plain");
@@ -43,7 +66,20 @@ void ServerAP::start() {
       server->send(404, "application/json", "{ \"error\": \"Falta body\" }");
     }
   });
+
+  server->on("/test", HTTP_GET, [this]() {
+    server->send(200, "application/json", "{ \"mode\": \"CONFIG\" }");
+  });
+
+  server->on("/config/wifi", HTTP_OPTIONS, [this]() {
+    server->sendHeader("access-control-allow-credentials", "false");
+    server->sendHeader("access-control-allow-headers", "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
+    server->sendHeader("access-control-allow-methods", "POST,OPTIONS");
+    server->send(204, "application/json");
+  });
+
   server->begin();
+  MDNS.begin("192.168.4.1");
 }
 
 void ServerAP::loop() {

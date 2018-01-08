@@ -6,7 +6,7 @@
 #include "hardware.h"
 #include "rules/rule.h"
 
-#define RULES_SIZE  4
+#define RULES_SIZE  5
 
 class Rules {
 
@@ -14,7 +14,7 @@ private:
   short cont = 0;
 
   std::shared_ptr<Hardware> hardware;
-  std::unique_ptr<Rule>     rules[RULES_SIZE];
+  std::shared_ptr<Rule>     rules[RULES_SIZE];
 
   void readRules();
 

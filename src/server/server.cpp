@@ -15,7 +15,6 @@ ServerIndoor::ServerIndoor(std::shared_ptr<Display> d) {
 
 void ServerIndoor::start() {
   display->clear();
-  ESP.eraseConfig();
   displayState = 1;
   show();
   rules->begin();
@@ -23,9 +22,7 @@ void ServerIndoor::start() {
   wifi->connect();
 
   String host = wifi->getHost();
-  if (MDNS.begin(host.c_str())) {
-    MDNS.addService("http", "tcp", 80);
-  }
+  MDNS.begin(host.c_str());
 
   srv->on("/config/wifi", HTTP_GET, [this]() {
     String body = wifi->getJSON();
@@ -38,18 +35,24 @@ void ServerIndoor::start() {
 
   srv->on("/hardware/clock", HTTP_GET, [this]() {
     ClockValue d = hardware->readClock();
-    srv->send(200, "application/json", "{ \"clock\": \""+String(d.year)+"-"+d.month+"-"+d.day+"T"+d.hour+":"+d.minute+":"+d.second+"\" }");
-  });
-
-  srv->on("/hardware/clock", HTTP_POST, [this]() {
-    ClockValue d = hardware->writeClock(srv->arg("year"),srv->arg("month"),srv->arg("day"),srv->arg("hour"),srv->arg("minute"),srv->arg("second"));
-    String strClock = getDate(d) + "T" + getTime(d);
+    String strClock = getDateYMD(d) + "T" + getTime(d) + "Z";
     srv->send(200, "application/json", "{ \"clock\": \"" + strClock + "\" }");
   });
 
+  srv->on("/hardware/clock", HTTP_POST, [this]() {
+    if (srv->hasArg("plain")) {
+      String plain = srv->arg("plain");
+      ClockValue d = hardware->writeClock(plain);
+      String strClock = getDateYMD(d) + "T" + getTime(d) + "Z";
+      srv->send(200, "application/json", "{ \"clock\": \"" + strClock + "\" }");
+    } else {
+      srv->send(400, "application/json", "{ \"error\": \"Falta body\" }");
+    }
+  });
+
   srv->on("/hardware/sensor", HTTP_GET, [this]() {
-    if (srv->hasArg("name")) {
-      String name = srv->arg("name");
+    if (srv->hasArg("type")) {
+      String name = srv->arg("type");
       HSENSOR sensor = hardware->readSensor(name);
       if (sensor.name == "ERROR") {
         srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" no existe.\" }");
@@ -61,11 +64,12 @@ void ServerIndoor::start() {
     } else {
       String buffer = String();
       for (int i = 0; i < hardware->getSensorNumber(); i++) {
-        String name = hardware->getSensorName(i);
+        HSENSOR sensor = hardware->readSensor(i);
+        String value = (isnan(sensor.value))?"-1":String(sensor.value);
         if (i == 0) {
-          buffer = "\"" + name + "\"";
+          buffer = "{ \"type\": \"" + sensor.name + "\", \"value\": " + value + " }";
         } else {
-          buffer = buffer + ",\"" + name + "\"";
+          buffer = buffer + ", { \"type\": \"" + sensor.name + "\", \"value\": " + value + " }";
         }
       }
       srv->send(200, "application/json", "[" + buffer + "]");
@@ -73,22 +77,22 @@ void ServerIndoor::start() {
   });
 
   srv->on("/hardware/switch", HTTP_GET, [this]() {
-    if (srv->hasArg("name")) {
-      String name = srv->arg("name");
+    if (srv->hasArg("type")) {
+      String name = srv->arg("type");
       HSWITCH sw = hardware->readSwitch(name);
       if (sw.name == "ERROR") {
         srv->send(400, "application/json", "{ \"error\": \"Switch "+name+" no existe.\" }");
       } else {
-        srv->send(200, "application/json", "{ \"name\": \""+sw.name+"\", \"manual\": "+String(sw.manual, 4)+", \"value\": "+String(sw.state, 4)+" }");
+        srv->send(200, "application/json", "{ \"type\": \""+sw.name+"\", \"manual\": "+String(sw.manual, 4)+", \"value\": "+String(sw.state, 4)+" }");
       }
     } else {
       String buffer = String();
       for (int i = 0; i < hardware->getSwitchNumber(); i++) {
-        String name = hardware->getSwitchName(i);
+        HSWITCH rsw = hardware->readSwitch(i);
         if (i == 0) {
-          buffer = "\"" + name + "\"";
+          buffer = "{ \"type\": \"" + rsw.name + "\", \"manual\": "+String(rsw.manual)+", \"value\": "+String(rsw.state)+" }";
         } else {
-          buffer = buffer + ",\"" + name + "\"";
+          buffer = buffer + ", { \"type\": \"" + rsw.name + "\", \"manual\": "+String(rsw.manual)+", \"value\": "+String(rsw.state)+" }";
         }
       }
       srv->send(200, "application/json", "[" + buffer + "]");
@@ -96,12 +100,12 @@ void ServerIndoor::start() {
   });
 
   srv->on("/hardware/switch", HTTP_POST, [this]() {
-    if (srv->hasArg("name") && srv->hasArg("plain")) {
-      String name = srv->arg("name");
+    if (srv->hasArg("type") && srv->hasArg("plain")) {
+      String name = srv->arg("type");
       String plain = srv->arg("plain");
-      int res = hardware->switchUpdate(name, plain);
-      if (res == 0) {
-        srv->send(200, "application/json", "{ \"status\": \"OK\" }");
+      HSWITCH rsw = hardware->switchUpdate(name, plain);
+      if (rsw.name != "ERROR") {
+        srv->send(200, "application/json", "{ \"type\": \"" + rsw.name + "\", \"manual\": "+String(rsw.manual)+", \"value\": "+String(rsw.state)+" }");
       } else {
         srv->send(400, "application/json", "{ \"error\": \"Error la parsear entrada.\" }");
       }
@@ -126,100 +130,33 @@ void ServerIndoor::start() {
     srv->send(200, "application/json", "{ \"status\": \"OK\" }");
   });
 
-  /*
-  srv->on("/hardware/config", HTTP_GET, [this]() {
-    srv->send(200, "application/json", jsonHardware(true));
-  });
-  srv->on("/hardware/values", HTTP_GET, [this]() {
-    srv->send(200, "application/json", jsonHardware(false));
-  });
-  srv->on("/hardware/write", HTTP_POST, [this]() {
-    String name = srv->arg("name");
-    String val = srv->arg("value");
-    float value = setHardwareValue(name, val, true);
-    if (value == SENSOR_DISABLED) {
-      srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" esta deshabilidado.\" }");
-    } else {
-      srv->send(200, "application/json", "{ \"value\": "+String(value, 4)+" }");
-    }
-  });
-  srv->on("/hardware/reset", HTTP_POST, [this]() {
-    resetHardware();
-    srv->send(200, "application/json", "{ \"value\": \"OK\" }");
-  });
-  srv->on("/hardware/enable", HTTP_POST, [this]() {
-    String name = srv->arg("name");
-    float value = enableHardware(name, true);
-    if (value == SENSOR_DISABLED) {
-      srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" esta deshabilidado.\" }");
-    } else if (value == SENSOR_WRONG) {
-      srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" no registrado.\" }");
-    } else {
-      srv->send(200, "application/json", "{ \"value\": \"OK\" }");
-    }
-  });
-  srv->on("/hardware/disable", HTTP_POST, [this]() {
-    String name = srv->arg("name");
-    float value = enableHardware(name, false);
-    if (value == SENSOR_DISABLED) {
-      srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" esta deshabilidado.\" }");
-    } else if (value == SENSOR_WRONG) {
-      srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" no registrado.\" }");
-    } else {
-      srv->send(200, "application/json", "{ \"value\": \"OK\" }");
-    }
-  });
-  srv->on("/hardware/manual", HTTP_POST, [this]() {
-    String name = srv->arg("name");
-    float value = manualHardware(name, true);
-    if (value == SENSOR_DISABLED) {
-      srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" esta deshabilidado.\" }");
-    } else if (value == SENSOR_WRONG) {
-      srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" no registrado.\" }");
-    } else {
-      srv->send(200, "application/json", "{ \"value\": \"OK\" }");
-    }
-  });
-  srv->on("/hardware/auto", HTTP_POST, [this]() {
-    String name = srv->arg("name");
-    float value = manualHardware(name, false);
-    if (value == SENSOR_DISABLED) {
-      srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" esta deshabilidado.\" }");
-    } else if (value == SENSOR_WRONG) {
-      srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" no registrado.\" }");
-    } else {
-      srv->send(200, "application/json", "{ \"value\": \"OK\" }");
-    }
-  });
-*/
-/*
-  srv->on("/rules", HTTP_GET, [this]() {
-    String json = listJsonRules();
-    srv->send(200, "application/json", json);
+  srv->on("/test", HTTP_GET, [this]() {
+    srv->send(200, "application/json", "{ \"mode\": \"NORMAL\" }");
   });
 
-  srv->on("/rules", HTTP_POST, [this]() {
-    String rule = srv->arg("plain");
-    insertRule(rule);
-    srv->send(200, "application/json", "{ \"value\": \"OK\" }");
+  srv->on("/hardware/switch", HTTP_OPTIONS, [this]() {
+    srv->sendHeader("access-control-allow-credentials", "false");
+    srv->sendHeader("access-control-allow-headers", "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
+    srv->sendHeader("access-control-allow-methods", "GET,POST,OPTIONS");
+    srv->send(204, "application/json");
   });
 
-  srv->on("/rules", HTTP_DELETE, [this]() {
-    if (srv->hasArg("idx")) {
-      String idx = srv->arg("idx");
-      deleteRule(idx.toInt());
-    } else {
-      deleteRules();
-    }
-    srv->send(200, "application/json", "{ \"value\": \"OK\" }");
+  srv->on("/hardware/clock", HTTP_OPTIONS, [this]() {
+    srv->sendHeader("access-control-allow-credentials", "false");
+    srv->sendHeader("access-control-allow-headers", "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
+    srv->sendHeader("access-control-allow-methods", "GET,POST,OPTIONS");
+    srv->send(204, "application/json");
   });
 
-  srv->on("/rules/reset", HTTP_POST, [this]() {
-    deleteRules();
-    srv->send(200, "application/json", "{ \"value\": \"OK\" }");
+  srv->on("/rules", HTTP_OPTIONS, [this]() {
+    srv->sendHeader("access-control-allow-credentials", "false");
+    srv->sendHeader("access-control-allow-headers", "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
+    srv->sendHeader("access-control-allow-methods", "GET,POST,OPTIONS");
+    srv->send(204, "application/json");
   });
-  */
+
   srv->begin();
+  MDNS.addService("http", "tcp", 80);
 }
 
 void ServerIndoor::click() {
@@ -262,14 +199,15 @@ void ServerIndoor::show() {
     ClockValue clock = hardware->readClock();
     display->printXY(0, 1, "IP: " + host);
     display->printXY(0, 2, "                    ");
-    display->printXY(0, 3, "Fecha: " + getDate(clock));
+    display->printXY(0, 3, "Fecha: " + getDateDMY(clock));
     display->printXY(0, 4, " Hora:  " + getTime(clock));
     return;
   }
   if (displayState == 3) {
     for (int i = 0; i < hardware->getSensorNumber(); i++) {
       String name = hardware->getSensorName(i);
-      display->printXY(0, i+1, hardware->printSensor(name));
+      String buf = hardware->printSensor(name);
+      display->printXY(0, i+1, buf);
     }
     return;
   }

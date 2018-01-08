@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <OneButton.h>
+#include <Wire.h>
 #include "components/display.h"
 #include "server/server.h"
 #include "serverAP/serverAP.h"
@@ -32,7 +33,7 @@ void setup() {
 }
 
 void singleClick() {
-  if (state == SERVER) {    
+  if (state == SERVER) {
     server->click();
   }
 }
