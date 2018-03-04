@@ -6,7 +6,6 @@
 #include <ESP8266mDNS.h>
 #include <DNSServer.h>
 #include <memory>
-#include "wifi.h"
 #include "hardware.h"
 #include "rules.h"
 
@@ -16,6 +15,10 @@ extern "C" {
 #define DISCONNECTED     0
 #define WAITING_CONNECT  1
 #define CONNECTED        2
+#define APM_CONFIGURE    3
+#define APM_CONFIGURE_OK    4
+#define APM_CONFIGURE_FAIL  5
+
 #define STA              "STA"
 #define APM              "APM"
 
@@ -36,8 +39,6 @@ private:
   std::shared_ptr<Hardware>         hardware;
   bool                              _debug = true;
 
-  const char*   _apName                 = "no-net";
-  const char*   _apPassword             = NULL;
   String        _ssid                   = "";
   String        _pass                   = "";
   unsigned long _configPortalTimeout    = 0;
@@ -46,6 +47,8 @@ private:
   bool           connect;
 
   void (*_callback)(ServerIndoor*, ServerState) = NULL;
+
+  void (*reset)() = NULL;
 
   // DNS server
   const byte    DNS_PORT = 53;
@@ -56,9 +59,7 @@ private:
 
   void configureServer();
 
-  bool startConfigPortal(char const *apName, char const *apPassword);
-
-  void setupConfigPortal();
+  void setupConfigPortal(String apName, String apPassword);
 
   bool configPortalHasTimeout();
 
@@ -76,6 +77,8 @@ public:
   void loop();
 
   void stop();
+
+  bool startConfigPortal();
 
   void setConnectTimeout(unsigned long connectTimeout);
 

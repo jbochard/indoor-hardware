@@ -34,9 +34,11 @@ bool ServerIndoor::start() {
     return true;
   }
 
-  String ssid = buildSSID("davinci", 10);
-  String pwd = randomPWD(10);
-  return startConfigPortal(ssid.c_str(), pwd.c_str());
+  ETS_UART_INTR_DISABLE();
+  wifi_station_disconnect();
+  ETS_UART_INTR_ENABLE();
+
+  return false;
 }
 
 void ServerIndoor::loop() {
@@ -201,21 +203,26 @@ void ServerIndoor::configureServer() {
     srv->begin();
 }
 
-bool ServerIndoor::startConfigPortal(char const *apName, char const *apPassword) {
+bool ServerIndoor::startConfigPortal() {
   //setup AP
   WiFi.mode(WIFI_AP_STA);
   DEBUG_WM("SET AP STA");
 
-  _apName = apName;
-  _apPassword = apPassword;
+  String _apName = buildSSID("davinci", 10).c_str();
+  String _apPassword = randomPWD(10).c_str();
+
+  if (_callback) {
+    _callback(this, { APM, APM_CONFIGURE, _apName, _apPassword, "192.168.1.4" });
+  }
 
   connect = false;
-  setupConfigPortal();
+  setupConfigPortal(_apName, _apPassword);
 
   while(1) {
 
     // check if timeout
-    if(configPortalHasTimeout()) break;
+    if(configPortalHasTimeout())
+      break;
 
     //DNS
     dnsServer->processNextRequest();
@@ -230,10 +237,16 @@ bool ServerIndoor::startConfigPortal(char const *apName, char const *apPassword)
       // using user-provided  _ssid, _pass in place of system-stored ssid and pass
       if (connectWifi(_ssid, _pass) != WL_CONNECTED) {
         DEBUG_WM(F("Failed to connect."));
+        if (_callback) {
+          _callback(this, { APM, APM_CONFIGURE_FAIL, _ssid, _pass, "192.168.1.4" });
+        }
       } else {
         //connected
         WiFi.mode(WIFI_STA);
-        break;
+        if (_callback) {
+          _callback(this, { APM, APM_CONFIGURE_OK, _ssid, _pass, "192.168.1.4" });
+        }
+        reset();
       }
     }
     yield();
@@ -252,7 +265,7 @@ bool ServerIndoor::configPortalHasTimeout() {
     return (millis() > _configPortalStart + _configPortalTimeout);
 }
 
-void ServerIndoor::setupConfigPortal() {
+void ServerIndoor::setupConfigPortal(String apName, String apPassword) {
   dnsServer.reset(new DNSServer());
   srv.reset(new ESP8266WebServer(80));
 
@@ -260,14 +273,14 @@ void ServerIndoor::setupConfigPortal() {
   _configPortalStart = millis();
 
   DEBUG_WM(F("Configuring access point... "));
-  DEBUG_WM(_apName);
-  if (_apPassword != NULL) {
-    if (strlen(_apPassword) < 8 || strlen(_apPassword) > 63) {
+  DEBUG_WM(apName);
+  if (apPassword != NULL) {
+    if (apPassword.length() < 8 || apPassword.length() > 63) {
       // fail passphrase to short or long!
       DEBUG_WM(F("Invalid AccessPoint password. Ignoring"));
-      _apPassword = NULL;
+      apPassword = "";
     }
-    DEBUG_WM(_apPassword);
+    DEBUG_WM(apPassword);
   }
 
   //optional soft ip config
@@ -276,11 +289,7 @@ void ServerIndoor::setupConfigPortal() {
     WiFi.softAPConfig(_ap_static_ip, _ap_static_gw, _ap_static_sn);
   }*/
 
-  if (_apPassword != NULL) {
-    WiFi.softAP(_apName, _apPassword);//password option
-  } else {
-    WiFi.softAP(_apName);
-  }
+  WiFi.softAP(apName.c_str(), apPassword.c_str());//password option
 
   delay(500); // Without delay I've seen the IP address blank
   DEBUG_WM(F("AP IP address: "));

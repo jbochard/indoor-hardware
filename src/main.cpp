@@ -7,6 +7,8 @@
 #include "server/server.h"
 #include "utils/utils.h"
 
+void(* resetFunc) (void) = 0;
+
 int state;
 std::unique_ptr<OneButton>      button;
 std::unique_ptr<ServerIndoor>   server;
@@ -85,6 +87,7 @@ void singleClick() {
 }
 
 void longClick() {
+  server->startConfigPortal();
 }
 
 void loop() {
@@ -112,6 +115,21 @@ void serverCallback(ServerIndoor *server, ServerState serverState) {
   if (serverState.state == CONNECTED) {
     state = 1;
     showInfo();
+    return;
+  }
+  if (serverState.state == APM_CONFIGURE) {
+    display->clear();
+    display->printXY(4, 0, ">> Indoor <<");
+    display->printXY(0, 1, "IP: 192.168.4.1     ");
+    display->printXY(0, 3, "ssid: " + serverState.ssid);
+    display->printXY(0, 4, "pwd: " + serverState.pwd);
+    return;
+  }
+  if (serverState.state == APM_CONFIGURE_OK) {
+    resetFunc();
+    return;
+  }
+  if (serverState.state == APM_CONFIGURE_FAIL) {
     return;
   }
 }
