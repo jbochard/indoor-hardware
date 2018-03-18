@@ -80,12 +80,14 @@ Hardware* ServerIndoor::hw() {
 void ServerIndoor::configureServer() {
 
     srv->on("/config/wifi", HTTP_GET, [this]() {
+      srv->sendHeader("access-control-allow-origin", "*");
       srv->send(200, "application/json",  "{\"ssid\":\""+WiFi.SSID()+"\",\"password\":\"***********\",\"host\":\""+WiFi.localIP().toString()+"\"}");
     });
 
     srv->on("/hardware/clock", HTTP_GET, [this]() {
       ClockValue d = hardware->readClock();
       String strClock = getDateYMD(d) + "T" + getTime(d) + "Z";
+      srv->sendHeader("access-control-allow-origin", "*");
       srv->send(200, "application/json", "{ \"clock\": \"" + strClock + "\" }");
     });
 
@@ -94,8 +96,10 @@ void ServerIndoor::configureServer() {
         String plain = srv->arg("plain");
         ClockValue d = hardware->writeClock(plain);
         String strClock = getDateYMD(d) + "T" + getTime(d) + "Z";
+        srv->sendHeader("access-control-allow-origin", "*");
         srv->send(200, "application/json", "{ \"clock\": \"" + strClock + "\" }");
       } else {
+        srv->sendHeader("access-control-allow-origin", "*");
         srv->send(400, "application/json", "{ \"error\": \"Falta body\" }");
       }
     });
@@ -105,10 +109,13 @@ void ServerIndoor::configureServer() {
         String name = srv->arg("type");
         HSENSOR sensor = hardware->readSensor(name);
         if (sensor.name == "ERROR") {
+          srv->sendHeader("access-control-allow-origin", "*");
           srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" no existe.\" }");
         } else if (isnan(sensor.value)) {
-            srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" retorno NaN.\" }");
+          srv->sendHeader("access-control-allow-origin", "*");
+          srv->send(400, "application/json", "{ \"error\": \"Sensor "+name+" retorno NaN.\" }");
         } else {
+          srv->sendHeader("access-control-allow-origin", "*");
           srv->send(200, "application/json", "{ \"name\": \""+sensor.name+"\", \"value\": "+String(sensor.value, 4)+" }");
         }
       } else {
@@ -122,6 +129,7 @@ void ServerIndoor::configureServer() {
             buffer = buffer + ", { \"type\": \"" + sensor.name + "\", \"value\": " + value + " }";
           }
         }
+        srv->sendHeader("access-control-allow-origin", "*");
         srv->send(200, "application/json", "[" + buffer + "]");
       }
     });
@@ -131,8 +139,10 @@ void ServerIndoor::configureServer() {
         String name = srv->arg("type");
         HSWITCH sw = hardware->readSwitch(name);
         if (sw.name == "ERROR") {
+          srv->sendHeader("access-control-allow-origin", "*");
           srv->send(400, "application/json", "{ \"error\": \"Switch "+name+" no existe.\" }");
         } else {
+          srv->sendHeader("access-control-allow-origin", "*");
           srv->send(200, "application/json", "{ \"type\": \""+sw.name+"\", \"manual\": "+String(sw.manual, 4)+", \"value\": "+String(sw.state, 4)+" }");
         }
       } else {
@@ -145,6 +155,7 @@ void ServerIndoor::configureServer() {
             buffer = buffer + ", { \"type\": \"" + rsw.name + "\", \"manual\": "+String(rsw.manual)+", \"value\": "+String(rsw.state)+" }";
           }
         }
+        srv->sendHeader("access-control-allow-origin", "*");
         srv->send(200, "application/json", "[" + buffer + "]");
       }
     });
@@ -155,47 +166,83 @@ void ServerIndoor::configureServer() {
         String plain = srv->arg("plain");
         HSWITCH rsw = hardware->switchUpdate(name, plain);
         if (rsw.name != "ERROR") {
+          srv->sendHeader("access-control-allow-origin", "*");
           srv->send(200, "application/json", "{ \"type\": \"" + rsw.name + "\", \"manual\": "+String(rsw.manual)+", \"value\": "+String(rsw.state)+" }");
         } else {
+          srv->sendHeader("access-control-allow-origin", "*");
           srv->send(400, "application/json", "{ \"error\": \"Error la parsear entrada.\" }");
         }
       } else {
+        srv->sendHeader("access-control-allow-origin", "*");
         srv->send(400, "application/json", "{ \"error\": \"Debe agregar un parámetro name con el nombre del switch a cambiar.\" }");
       }
     });
 
     srv->on("/rules", HTTP_GET, [this]() {
       String json = rules->toJSON();
+      srv->sendHeader("access-control-allow-origin", "*");
       srv->send(200, "application/json", json);
     });
 
     srv->on("/rules", HTTP_POST, [this]() {
       String rule = srv->arg("plain");
       rules->configure(rule);
+      srv->sendHeader("access-control-allow-origin", "*");
       srv->send(200, "application/json", "{ \"value\": \"OK\" }");
     });
 
     srv->on("/test", HTTP_GET, [this]() {
+      Serial.println("GET /test");
+      srv->sendHeader("access-control-allow-origin", "*");
       srv->send(200, "application/json", "{ \"mode\": \"NORMAL\" }");
+    });
+
+    srv->on("/config/wifi", HTTP_OPTIONS, [this]() {
+      srv->sendHeader("access-control-allow-credentials", "false");
+      srv->sendHeader("access-control-allow-origin", "*");
+      srv->sendHeader("access-control-allow-headers", "Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
+      srv->sendHeader("access-control-allow-methods", "GET,OPTIONS");
+      srv->send(204, "application/json");
+    });
+
+    srv->on("/hardware/sensor", HTTP_OPTIONS, [this]() {
+      srv->sendHeader("access-control-allow-credentials", "false");
+      srv->sendHeader("access-control-allow-origin", "*");
+      srv->sendHeader("access-control-allow-headers", "Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
+      srv->sendHeader("access-control-allow-methods", "GET,OPTIONS");
+      srv->send(204, "application/json");
+    });
+
+    srv->on("/test", HTTP_OPTIONS, [this]() {
+      Serial.println("OPTIONS /test");
+      Serial.println(srv->uri());
+      srv->sendHeader("access-control-allow-credentials", "false");
+      srv->sendHeader("access-control-allow-origin", "*");
+      srv->sendHeader("access-control-allow-headers", "Origin, Accept, X-Requested-With, Content-Type");
+      srv->sendHeader("access-control-allow-methods", "GET, OPTIONS");
+      srv->send(200, "application/json");
     });
 
     srv->on("/hardware/switch", HTTP_OPTIONS, [this]() {
       srv->sendHeader("access-control-allow-credentials", "false");
-      srv->sendHeader("access-control-allow-headers", "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
+      srv->sendHeader("access-control-allow-origin", "*");
+      srv->sendHeader("access-control-allow-headers", "Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
       srv->sendHeader("access-control-allow-methods", "GET,POST,OPTIONS");
       srv->send(204, "application/json");
     });
 
     srv->on("/hardware/clock", HTTP_OPTIONS, [this]() {
       srv->sendHeader("access-control-allow-credentials", "false");
-      srv->sendHeader("access-control-allow-headers", "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
+      srv->sendHeader("access-control-allow-origin", "*");
+      srv->sendHeader("access-control-allow-headers", "Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
       srv->sendHeader("access-control-allow-methods", "GET,POST,OPTIONS");
       srv->send(204, "application/json");
     });
 
     srv->on("/rules", HTTP_OPTIONS, [this]() {
       srv->sendHeader("access-control-allow-credentials", "false");
-      srv->sendHeader("access-control-allow-headers", "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
+      srv->sendHeader("access-control-allow-origin", "*");
+      srv->sendHeader("access-control-allow-headers", "Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
       srv->sendHeader("access-control-allow-methods", "GET,POST,OPTIONS");
       srv->send(204, "application/json");
     });
@@ -304,22 +351,35 @@ void ServerIndoor::setupConfigPortal(String apName, String apPassword) {
       String plain = srv->arg("plain");
       String body = updateWifi(plain);
       if (body.indexOf("error") > 0) {
+        srv->sendHeader("access-control-allow-origin", "*");
         srv->send(404, "application/json", body);
       } else {
+        srv->sendHeader("access-control-allow-origin", "*");
         srv->send(200, "application/json", body);
       }
     } else {
+      srv->sendHeader("access-control-allow-origin", "*");
       srv->send(404, "application/json", "{ \"error\": \"Falta body\" }");
     }
   });
 
   srv->on("/test", HTTP_GET, [this]() {
+    srv->sendHeader("access-control-allow-origin", "*");
     srv->send(200, "application/json", "{ \"mode\": \"CONFIG\" }");
   });
 
   srv->on("/config/wifi", HTTP_OPTIONS, [this]() {
     srv->sendHeader("access-control-allow-credentials", "false");
-    srv->sendHeader("access-control-allow-headers", "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
+    srv->sendHeader("access-control-allow-origin", "*");
+    srv->sendHeader("access-control-allow-headers", "Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
+    srv->sendHeader("access-control-allow-methods", "POST,OPTIONS");
+    srv->send(204, "application/json");
+  });
+
+  srv->on("/test", HTTP_OPTIONS, [this]() {
+    srv->sendHeader("access-control-allow-credentials", "false");
+    srv->sendHeader("access-control-allow-origin", "*");
+    srv->sendHeader("access-control-allow-headers", "Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers");
     srv->sendHeader("access-control-allow-methods", "POST,OPTIONS");
     srv->send(204, "application/json");
   });
